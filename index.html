@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAMA v2 - Balneabilidade Pública (Parque Regina Freire)</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Leaflet CSS & JS para Mapas Interativos e Imagens de Satélite HD -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+              900: '#0c4a6e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom styles for Leaflet popups & smooth transitions */
+    .leaflet-popup-content-wrapper {
+      border-radius: 1rem;
+      padding: 4px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25);
+    }
+    .custom-flag-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    html {
+      scroll-behavior: smooth;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col font-sans">
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- TOP HEADER -->
+  <header class="bg-slate-900 text-white shadow-xl sticky top-0 z-50 border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row justify-between items-center gap-4">
+      
+      <!-- LOGO & BRANDING -->
+      <div class="flex items-center gap-3">
+        <div class="bg-gradient-to-tr from-sky-600 to-emerald-500 p-3 rounded-2xl text-white shadow-lg shadow-sky-900/40">
+          <i class="fa-solid fa-water text-2xl animate-pulse"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl font-black tracking-tight text-white">SAMA <span class="text-sky-400 font-light">v2</span></h1>
+            <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Portal Público</span>
+          </div>
+          <p class="text-xs text-slate-400">Balneabilidade Pública • Parque Ecológico Regina Freire (Lagoa da Chapadinha)</p>
+        </div>
+      </div>
+
+      <!-- BOTÃO ÁREA TÉCNICA (LINK DIRETO FIGMA) -->
+      <a href="https://www.figma.com/make/otsFi68MN8NI61SJgiHEfs/Formul%C3%A1rio-de-c%C3%A1lculo-de-pH?fullscreen=1&t=Vj5S991CYVsUlLIw-1&code-node-id=0-6" 
+         target="_blank" 
+         rel="noopener noreferrer"
+         class="flex items-center gap-2.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-lg shadow-sky-900/30 transition-all transform hover:-translate-y-0.5 shrink-0">
+        <i class="fa-solid fa-flask text-sky-200 text-base"></i>
+        <span>Área Técnica (Cálculo de pH)</span>
+        <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-sky-200 opacity-80 ml-0.5"></i>
+      </a>
+
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex-1 w-full space-y-6">
+
+    <!-- HEADER EXPLICATIVO CETESB / PARQUE REGINA FREIRE -->
+    <div class="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+      <div class="space-y-1">
+        <div class="flex items-center gap-2">
+          <span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase">Qualidade das Águas de Lazer</span>
+          <span class="text-xs text-slate-400"><i class="fa-regular fa-clock mr-1"></i> Atualizado Semanalmente</span>
+        </div>
+        <h2 class="text-2xl font-black text-slate-800">Balneabilidade da Lagoa • Parque Regina Freire</h2>
+        <p class="text-xs text-slate-500 max-w-3xl">
+          Acompanhe a classificação microbiológica e físico-química da lagoa de acordo com os critérios padrão da <strong>CETESB</strong> e Resoluções <strong>CONAMA 274/357</strong> em Itapetininga / SP.
+        </p>
+      </div>
+
+      <!-- LEGENDA DAS BANDEIRAS CETESB -->
+      <div class="flex flex-wrap items-center gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200 shrink-0 w-full md:w-auto justify-around">
+        <div class="flex items-center gap-2">
+          <span class="w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white shadow"></span>
+          <span class="text-xs font-bold text-slate-700">PRÓPRIA (Verde)</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="w-3.5 h-3.5 rounded-full bg-amber-500 border-2 border-white shadow"></span>
+          <span class="text-xs font-bold text-slate-700">ATENÇÃO (Amarela)</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="w-3.5 h-3.5 rounded-full bg-rose-600 border-2 border-white shadow"></span>
+          <span class="text-xs font-bold text-slate-700">IMPRÓPRIA (Vermelha)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- BANNER BANDEIRA DE BALNEABILIDADE ATUAL DA LAGOA -->
+    <div id="banner-status-geral" class="bg-emerald-600 text-white p-6 rounded-3xl shadow-lg shadow-emerald-900/10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 relative overflow-hidden transition-all duration-300">
+      <div class="absolute -right-10 -bottom-10 opacity-10 text-white text-9xl pointer-events-none">
+        <i class="fa-solid fa-flag"></i>
+      </div>
+      <div class="flex items-center gap-5 z-10">
+        <div class="bg-white/20 backdrop-blur-md p-4 rounded-2xl text-3xl shrink-0 flex items-center justify-center w-16 h-16">
+          <i class="fa-solid fa-flag text-white" id="banner-icon"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="bg-white/20 text-white text-xs font-bold px-3 py-0.5 rounded-full uppercase tracking-wider">Classificação Oficial</span>
+            <span class="text-xs text-emerald-100 flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-emerald-300 animate-ping"></span> Monitoramento Ativo
+            </span>
+          </div>
+          <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight" id="banner-title">Lagoa Própria para Banho e Recreação</h2>
+          <p class="text-emerald-100 text-sm mt-1 max-w-2xl" id="banner-desc">
+            Os pontos analisados na Lagoa do Parque Regina Freire atendem integralmente aos parâmetros bacteriológicos de $E.\ coli$ e físico-químicos (pH e Turbidez) para contato recreativo.
+          </p>
+        </div>
+      </div>
+
+      <div class="bg-white/10 backdrop-blur-md border border-white/20 text-white p-4 rounded-2xl text-center min-w-[220px] shrink-0 z-10 w-full lg:w-auto">
+        <span class="text-xs uppercase tracking-wider text-emerald-100 font-semibold block">Condição Geral</span>
+        <span class="text-3xl font-black block mt-0.5 tracking-wide" id="banner-badge">PRÓPRIA</span>
+        <span class="text-[11px] text-emerald-100 block mt-1">Bandeira Verde • CONAMA 274/357</span>
+      </div>
+    </div>
+
+    <!-- MAPA INTERATIVO DA LAGOA (PARQUE REGINA FREIRE) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- CONTAINER DO MAPA DA LAGOA (2 COLUNAS) -->
+      <div class="lg:col-span-2 bg-white rounded-3xl p-4 border border-slate-200/80 shadow-md space-y-3">
+        <div class="flex justify-between items-center px-2 pt-1">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-satellite text-sky-600 text-lg"></i>
+            <h3 class="font-extrabold text-slate-800 text-base">Satélite • Parque Ecológico Regina Freire</h3>
+          </div>
+          <!-- CONTROLE DE CAMADA DO MAPA -->
+          <div class="flex gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+            <button onclick="setPublicMapLayer('satelite')" id="btn-pub-sat" class="px-3 py-1 rounded-lg bg-white shadow text-sky-700 font-bold">Satélite HD</button>
+            <button onclick="setPublicMapLayer('ruas')" id="btn-pub-ruas" class="px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900">Mapa Vetorial</button>
+          </div>
+        </div>
+
+        <!-- MAPA LEAFLET PARA CIDADÃOS -->
+        <div id="map-cidadao" class="w-full h-[480px] rounded-2xl border border-slate-200 z-10 shadow-inner"></div>
+
+        <div class="flex justify-between items-center px-2 text-xs text-slate-400 pt-1">
+          <span><i class="fa-solid fa-hand-pointer text-sky-500 mr-1"></i> Clique nas bandeiras para abrir laudos detalhados</span>
+          <span><i class="fa-solid fa-location-dot text-emerald-500 mr-1"></i> Itapetininga/SP (-23.6221, -48.0450)</span>
+        </div>
+      </div>
+
+      <!-- PAINEL LATERAL DE CARDS DOS PONTOS DA LAGOA -->
+      <div class="space-y-4 flex flex-col justify-between" id="cards-pontos-container">
+        <!-- Gerado dinamicamente no JS -->
+      </div>
+
+    </div>
+
+    <!-- PAINEL INFORMATIVO & QR CODE NO PARQUE -->
+    <div class="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-3xl p-6 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
+      <div class="space-y-2 max-w-2xl">
+        <span class="bg-sky-500/20 text-sky-400 text-xs font-bold px-3 py-1 rounded-full uppercase border border-sky-400/30">Placas no Parque Regina Freire</span>
+        <h3 class="text-xl font-bold">Consulte no Totem ao Lado da Lagoa</h3>
+        <p class="text-slate-300 text-sm leading-relaxed">
+          Ao passear pelo Parque Regina Freire, você pode escanear o QR Code instalado nos totens ao redor da lagoa para conferir instantaneamente o boletim de balneabilidade antes do lazer.
+        </p>
+      </div>
+      
+      <div class="bg-white p-4 rounded-2xl text-slate-900 flex items-center gap-4 shrink-0 shadow-lg">
+        <div class="bg-slate-100 p-2 rounded-xl text-center">
+          <i class="fa-solid fa-qrcode text-5xl text-slate-800"></i>
+          <span class="text-[9px] font-bold text-slate-500 block mt-1">SAMA CETESB</span>
+        </div>
+        <div class="text-left">
+          <strong class="text-sm block font-bold">Itapetininga - SP</strong>
+          <span class="text-xs text-slate-500 block">Parque Regina Freire</span>
+          <button onclick="copiarLinkPublico()" class="mt-2 text-xs bg-sky-600 text-white font-semibold px-3 py-1.5 rounded-lg hover:bg-sky-700 transition-colors">
+            <i class="fa-solid fa-share-nodes mr-1"></i> Compartilhar Link
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- GUIA RÁPIDO CETESB / CONAMA -->
+    <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm space-y-6">
+      <div>
+        <span class="text-xs font-extrabold text-sky-600 uppercase tracking-wider block mb-1">Critérios Técnicos de Qualidade</span>
+        <h3 class="text-xl font-black text-slate-800">Entenda a Classificação da Água</h3>
+        <p class="text-slate-500 text-xs mt-1">
+          Regras de amostragem bacteriológica e físico-química baseadas no padrão estipulado pela CETESB e CONAMA.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-2.5">
+          <div class="bg-emerald-600 text-white w-9 h-9 rounded-xl flex items-center justify-center text-base font-bold shadow-md">
+            <i class="fa-solid fa-flag"></i>
+          </div>
+          <h4 class="font-bold text-slate-800 text-sm">Bandeira Verde (Própria)</h4>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Indicada quando 80% ou mais das coletas recentes apresentam ausência de $E.\ coli$ e pH na faixa de 6.0 a 9.0.
+          </p>
+        </div>
+
+        <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-2.5">
+          <div class="bg-amber-500 text-white w-9 h-9 rounded-xl flex items-center justify-center text-base font-bold shadow-md">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          </div>
+          <h4 class="font-bold text-slate-800 text-sm">Bandeira Amarela (Atenção)</h4>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Sinaliza alterações temporárias causadas por fortes chuvas recentes ou ligeiro aumento de turbidez na lagoa.
+          </p>
+        </div>
+
+        <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-2.5">
+          <div class="bg-rose-600 text-white w-9 h-9 rounded-xl flex items-center justify-center text-base font-bold shadow-md">
+            <i class="fa-solid fa-ban"></i>
+          </div>
+          <h4 class="font-bold text-slate-800 text-sm">Bandeira Vermelha (Imprópria)</h4>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Recomenda a suspensão do contato primário devido a parâmetros fora da norma de segurança ambiental.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="bg-slate-900 text-slate-400 text-xs py-6 border-t border-slate-800 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div class="flex items-center gap-2">
+        <span class="font-bold text-white">SAMA v2</span> • Parque Ecológico Regina Freire (Lagoa da Chapadinha), Itapetininga/SP
+      </div>
+      <div>
+        Portal de Transparência e Monitoramento de Balneabilidade
+      </div>
+    </div>
+  </footer>
+
+  <!-- LÓGICA JAVASCRIPT DOS MAPAS DE SATÉLITE E PONTOS -->
+  <script>
+
+    // COORDENADAS EXATAS DA LAGOA DO PARQUE REGINA FREIRE (ITAPETININGA - SP)
+    const REGINA_FREIRE_CENTER = [-23.6221, -48.0450];
+    const REGINA_FREIRE_ZOOM = 16.5;
+
+    // BASE DE DADOS DOS PONTOS DA LAGOA NO PARQUE REGINA FREIRE
+    let laudosBD = [
+      {
+        id: "COL-2026-101",
+        ponto: "Ponto 01 - Deck Principal / Prainha",
+        lat: -23.6221,
+        lng: -48.0450,
+        dataHora: "12/09/2026 14:00",
+        tecnico: "Eng. Amanda Costa",
+        orgao: "Sabesp / Prefeitura",
+        ph: 7.4,
+        turbidez: 3.2,
+        ecoli: "Ausente",
+        situacao: "PRÓPRIA",
+        historico5Semanas: ["P", "P", "P", "P", "P"] // P = Própria, A = Atenção, I = Imprópria
+      },
+      {
+        id: "COL-2026-102",
+        ponto: "Ponto 02 - Deck Norte / Afluente",
+        lat: -23.6205,
+        lng: -48.0458,
+        dataHora: "12/09/2026 13:45",
+        tecnico: "Prof. Marcos Lima",
+        orgao: "FATEC Itapetininga",
+        ph: 6.8,
+        turbidez: 7.1,
+        ecoli: "Presente (Baixo)",
+        situacao: "ATENÇÃO",
+        historico5Semanas: ["A", "P", "A", "P", "P"]
+      },
+      {
+        id: "COL-2026-103",
+        ponto: "Ponto 03 - Vertedouro Sul",
+        lat: -23.6238,
+        lng: -48.0442,
+        dataHora: "12/09/2026 13:30",
+        tecnico: "Téc. Roberto Alves",
+        orgao: "Prefeitura Municipal",
+        ph: 7.2,
+        turbidez: 2.9,
+        ecoli: "Ausente",
+        situacao: "PRÓPRIA",
+        historico5Semanas: ["P", "P", "P", "P", "A"]
+      }
+    ];
+
+    // INSTÂNCIAS DOS MAPAS LEAFLET
+    let mapPublico = null;
+    let publicSatLayer = null;
+    let publicStreetLayer = null;
+    let publicMarkersGroup = null;
+
+    // INICIALIZAÇÃO DA APLICAÇÃO AO CARREGAR
+    document.addEventListener("DOMContentLoaded", () => {
+      renderizarCardsPontosCidadao();
+      initMapPublico();
+    });
+
+    // SISTEMA DE NOTIFICAÇÃO TOAST
+    function showToast(mensagem, tipo = "info") {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      let bgClass = "bg-slate-900 text-white";
+      let icon = "fa-circle-info text-sky-400";
+
+      if (tipo === "success") {
+        bgClass = "bg-emerald-600 text-white shadow-emerald-900/30";
+        icon = "fa-circle-check text-emerald-200";
+      }
+
+      toast.className = `${bgClass} shadow-xl border border-white/20 px-4 py-3 rounded-2xl text-xs font-semibold flex items-center gap-3 transition-all duration-300 transform translate-y-2 pointer-events-auto max-w-sm`;
+      toast.innerHTML = `<i class="fa-solid ${icon} text-base"></i> <span>${mensagem}</span>`;
+
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-4');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    // INICIALIZAR MAPA DE SATÉLITE DA LAGOA DO PARQUE REGINA FREIRE
+    function initMapPublico() {
+      if (mapPublico) return;
+
+      mapPublico = L.map('map-cidadao', {
+        center: REGINA_FREIRE_CENTER,
+        zoom: REGINA_FREIRE_ZOOM,
+        scrollWheelZoom: false
+      });
+
+      // Camada de Satélite Esri High Resolution (ArcGIS World Imagery)
+      publicSatLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri &mdash; Lagoa Parque Regina Freire, Itapetininga/SP'
+      });
+
+      // Camada Vetorial OpenStreetMap
+      publicStreetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      });
+
+      // Padrão: Imagem de Satélite em Alta Definição
+      publicSatLayer.addTo(mapPublico);
+      publicMarkersGroup = L.layerGroup().addTo(mapPublico);
+
+      atualizarMarcadoresMapaPublico();
+    }
+
+    // ALTERNAR CAMADAS (SATÉLITE / RUA)
+    function setPublicMapLayer(tipo) {
+      if (!mapPublico) return;
+
+      const btnSat = document.getElementById('btn-pub-sat');
+      const btnRuas = document.getElementById('btn-pub-ruas');
+
+      if (tipo === 'satelite') {
+        mapPublico.removeLayer(publicStreetLayer);
+        publicSatLayer.addTo(mapPublico);
+        btnSat.className = "px-3 py-1 rounded-lg bg-white shadow text-sky-700 font-bold";
+        btnRuas.className = "px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900";
+      } else {
+        mapPublico.removeLayer(publicSatLayer);
+        publicStreetLayer.addTo(mapPublico);
+        btnRuas.className = "px-3 py-1 rounded-lg bg-white shadow text-sky-700 font-bold";
+        btnSat.className = "px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900";
+      }
+    }
+
+    // DESENHAR BANDEIRAS CETESB NO MAPA DE SATÉLITE
+    function atualizarMarcadoresMapaPublico() {
+      if (!publicMarkersGroup) return;
+      publicMarkersGroup.clearLayers();
+
+      laudosBD.forEach(item => {
+        let flagBg = "#10b981"; // Verde (Própria)
+        let flagText = "PRÓPRIA";
+
+        if (item.situacao === "ATENÇÃO") {
+          flagBg = "#f59e0b";
+          flagText = "ATENÇÃO";
+        } else if (item.situacao === "IMPRÓPRIO") {
+          flagBg = "#e11d48";
+          flagText = "IMPRÓPRIO";
+        }
+
+        const flagIconHtml = `
+          <div class="shadow-xl rounded-xl overflow-hidden border-2 border-white text-white font-black text-[10px] flex flex-col items-center justify-center p-1.5 transition-transform transform hover:scale-110 cursor-pointer" style="background-color: ${flagBg}; width: 90px; text-align: center;">
+            <i class="fa-solid fa-flag text-xs mb-0.5"></i>
+            <span>${flagText}</span>
+          </div>
+        `;
+
+        const customIcon = L.divIcon({
+          html: flagIconHtml,
+          className: 'custom-flag-icon',
+          iconSize: [90, 40],
+          iconAnchor: [45, 20]
+        });
+
+        const popupContent = `
+          <div class="p-2 space-y-2 text-slate-800">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-sky-600 block">Parque Regina Freire</span>
+            <strong class="text-sm block font-extrabold text-slate-900">${item.ponto}</strong>
+            
+            <div class="grid grid-cols-2 gap-1.5 text-[11px] bg-slate-50 p-2 rounded-xl border border-slate-100">
+              <div><strong>pH:</strong> ${item.ph}</div>
+              <div><strong>Turbidez:</strong> ${item.turbidez} NTU</div>
+              <div class="col-span-2"><strong>E. coli:</strong> ${item.ecoli}</div>
+              <div class="col-span-2"><strong>Condição:</strong> <span class="font-bold" style="color: ${flagBg}">${item.situacao}</span></div>
+            </div>
+
+            <div class="text-[10px] text-slate-400 border-t pt-1">
+              Coletado em ${item.dataHora} por ${item.tecnico} (${item.orgao})
+            </div>
+          </div>
+        `;
+
+        L.marker([item.lat, item.lng], { icon: customIcon })
+          .addTo(publicMarkersGroup)
+          .bindPopup(popupContent);
+      });
+    }
+
+    // RENDERIZAR CARDS DOS PONTOS COM HISTÓRICO DAS 5 SEMANAS
+    function renderizarCardsPontosCidadao() {
+      const container = document.getElementById('cards-pontos-container');
+      container.innerHTML = '';
+
+      laudosBD.forEach(item => {
+        let badgeBg = "bg-emerald-100 text-emerald-800 border-emerald-300";
+        let iconColor = "text-emerald-500";
+
+        if (item.situacao === "ATENÇÃO") {
+          badgeBg = "bg-amber-100 text-amber-800 border-amber-300";
+          iconColor = "text-amber-500";
+        } else if (item.situacao === "IMPRÓPRIO") {
+          badgeBg = "bg-rose-100 text-rose-800 border-rose-300";
+          iconColor = "text-rose-600";
+        }
+
+        // Histórico de 5 Semanas estilo CETESB
+        const historicoHtml = item.historico5Semanas.map(st => {
+          let hColor = "bg-emerald-500 text-white";
+          if (st === "A") hColor = "bg-amber-500 text-white";
+          if (st === "I") hColor = "bg-rose-600 text-white";
+          return `<span class="${hColor} w-5 h-5 rounded-md text-[10px] font-black flex items-center justify-center shadow-sm">${st}</span>`;
+        }).join('');
+
+        const card = document.createElement('div');
+        card.className = "bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md transition-all flex flex-col justify-between";
+        card.innerHTML = `
+          <div>
+            <div class="flex justify-between items-start mb-2">
+              <div>
+                <span class="text-[10px] font-bold text-sky-600 uppercase tracking-wider">Parque Regina Freire</span>
+                <h3 class="font-bold text-sm sm:text-base text-slate-800">${item.ponto}</h3>
+              </div>
+              <span class="${badgeBg} border text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 shrink-0">
+                <i class="fa-solid fa-flag text-[10px] ${iconColor}"></i> ${item.situacao}
+              </span>
+            </div>
+
+            <!-- HISTÓRICO CETESB DAS ÚLTIMAS 5 SEMANAS -->
+            <div class="my-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex items-center justify-between">
+              <span class="text-[11px] font-bold text-slate-500">Histórico (5 Semanas):</span>
+              <div class="flex gap-1">
+                ${historicoHtml}
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 text-xs mb-2">
+              <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                <span class="text-slate-400 block mb-0.5 text-[10px]">pH Medido</span>
+                <strong class="text-slate-800 text-sm font-extrabold">${item.ph}</strong>
+              </div>
+              <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                <span class="text-slate-400 block mb-0.5 text-[10px]">Turbidez</span>
+                <strong class="text-slate-800 text-sm font-extrabold">${item.turbidez} NTU</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-2 border-t border-slate-100 flex justify-between items-center text-[11px] text-slate-400">
+            <span><i class="fa-regular fa-clock mr-1"></i> Coleta: ${item.dataHora.split(' ')[0]}</span>
+            <button onclick="focarPontoNoMapa(${item.lat}, ${item.lng})" class="text-sky-600 hover:text-sky-800 font-bold flex items-center gap-1">
+              <i class="fa-solid fa-crosshairs"></i> Ver no Mapa
+            </button>
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    // FOCAR E CENTRALIZAR PONTO NO MAPA DE SATÉLITE
+    function focarPontoNoMapa(lat, lng) {
+      if (mapPublico) {
+        mapPublico.flyTo([lat, lng], 17.5, { duration: 1.2 });
+        showToast("Centralizando visualização de satélite no ponto do Parque Regina Freire.", "info");
+      }
+    }
+
+    // COPIAR LINK PÚBLICO DE COMPARTILHAMENTO
+    function copiarLinkPublico() {
+      document.execCommand('copy');
+      showToast("Link do Portal de Balneabilidade copiado com sucesso!", "success");
+    }
+
+  </script>
+</body>
+</html>
