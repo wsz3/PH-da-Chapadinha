@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="SAMA - Sistema Autônomo de Monitoramento Ambiental da Lagoa da Chapadinha. Acompanhe em tempo real a qualidade da água, diagnósticos e alertas ambientais.">
+  <meta name="theme-color" content="#0d9488">
+  <title>SAMA | Monitoramento Hídrico - Lagoa da Chapadinha</title>
+  <link rel="stylesheet" href="public.css">
+</head>
+<body>
+  <!-- Cabeçalho Principal da Visão Cidadão -->
+  <header class="app-header">
+    <div class="header-left">
+      <button id="btnToggleDrawer" class="menu-toggle-btn" aria-label="Abrir menu de navegação e filtros" aria-expanded="false">
+        <span class="hamburger-bar"></span>
+        <span class="hamburger-bar"></span>
+        <span class="hamburger-bar"></span>
+      </button>
+      <div class="brand">
+        <div class="brand-symbol" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" fill="rgba(13,148,136,0.2)"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1 class="brand-title">SAMA</h1>
+          <p class="brand-subtitle">Lagoa da Chapadinha</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Indicador de Status Geral e Acesso Operador -->
+    <div class="header-right">
+      <div class="status-summary-pill" id="globalStatusPill" title="Classificação geral da qualidade hídrica da bacia">
+        <span class="status-dot status-dot--yellow" aria-hidden="true"></span>
+        <span class="status-text">Status: <strong>Atenção Geral</strong></span>
+      </div>
+      <a href="especialista.html" class="specialist-link" title="Acessar terminal de coleta para operadores de campo">
+        <span class="specialist-badge">Campo</span>
+        <span class="specialist-label">Visão Especialista</span>
+        <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor" aria-hidden="true">
+          <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+        </svg>
+      </a>
+    </div>
+  </header>
+
+  <!-- Overlay Suave do Menu Lateral (Não Cobre 100% da Tela) -->
+  <div id="drawerBackdrop" class="drawer-backdrop" aria-hidden="true"></div>
+
+  <aside id="sideDrawer" class="side-drawer" aria-label="Painel de Controle e Informações Ambientais" aria-hidden="true">
+    <div class="drawer-header">
+      <div class="drawer-header-title">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" class="drawer-icon">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 16v-4"/>
+          <path d="M12 8h.01"/>
+        </svg>
+        <h2>Transparência Hídrica</h2>
+      </div>
+      <button id="btnCloseDrawer" class="close-drawer-btn" aria-label="Fechar menu lateral">&times;</button>
+    </div>
+
+    <div class="drawer-body">
+      <!-- Resumo Executivo da Lagoa -->
+      <section class="drawer-section">
+        <h3 class="drawer-section-title">Panorama da Bacia</h3>
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-value" id="kpiTotalPoints">5</span>
+            <span class="kpi-label">Pontos Ativos</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-value kpi-value--green" id="kpiIdealPoints">2</span>
+            <span class="kpi-label">Ideais</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-value kpi-value--yellow" id="kpiWarningPoints">1</span>
+            <span class="kpi-label">Atenção</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-value kpi-value--red" id="kpiCriticalPoints">2</span>
+            <span class="kpi-label">Críticos</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Filtros Semafóricos de Pontos no Mapa -->
+      <section class="drawer-section">
+        <h3 class="drawer-section-title">Filtrar por Diagnóstico</h3>
+        <div class="filter-buttons" role="group" aria-label="Filtrar pontos por condição">
+          <button class="filter-btn active" data-filter="all">Todos (5)</button>
+          <button class="filter-btn filter-btn--green" data-filter="green">Ideal (2)</button>
+          <button class="filter-btn filter-btn--yellow" data-filter="yellow">Atenção (1)</button>
+          <button class="filter-btn filter-btn--red" data-filter="red">Crítico (2)</button>
+        </div>
+      </section>
+
+      <!-- Lista de Pontos Monitorados com Clique Rápido -->
+      <section class="drawer-section">
+        <h3 class="drawer-section-title">Pontos de Amostragem</h3>
+        <ul class="points-list" id="drawerPointsList">
+          <!-- Injetado dinamicamente via JS -->
+        </ul>
+      </section>
+
+      <!-- Guia Educativo do Cidadão (Critérios CONAMA) -->
+      <section class="drawer-section educational-section">
+        <h3 class="drawer-section-title">Critério do Pior Cenário</h3>
+        <p class="educational-text">
+          Conforme a Resolução <strong>CONAMA 357</strong>, a segurança da água é regida pelo princípio da máxima proteção: mesmo que o <em>pH esteja neutro (6.0 a 9.0)</em>, a presença de contaminação biológica (ex: <em>E. coli</em>) ou desvios físicos (turbidez alta) classifica imediatamente o ponto como <strong>Crítico (Vermelho)</strong>.
+        </p>
+        <div class="educational-legend">
+          <div class="legend-row">
+            <span class="legend-badge legend-badge--green">Ideal</span>
+            <span>Própria para contato primário e recreação.</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-badge legend-badge--yellow">Atenção</span>
+            <span>Desvios pontuais; monitoramento intensificado.</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-badge legend-badge--red">Crítico</span>
+            <span>Imprópria para banho, pesca ou consumo direto.</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="drawer-footer">
+      <a href="especialista.html" class="drawer-action-btn">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        Entrar na Área do Especialista
+      </a>
+    </div>
+  </aside>
+
+  <!-- Conteúdo Principal: Mapa Interativo da Lagoa -->
+  <main class="public-main">
+    <section class="map-viewport" id="mapViewport" aria-label="Visualizador cartográfico da Lagoa da Chapadinha">
+      <!-- Controles de Navegação no Mapa -->
+      <div class="map-controls" role="toolbar" aria-label="Controles de zoom do mapa">
+        <button id="btnZoomIn" class="map-ctrl-btn" title="Aumentar Zoom" aria-label="Aumentar Zoom">+</button>
+        <button id="btnZoomOut" class="map-ctrl-btn" title="Diminuir Zoom" aria-label="Diminuir Zoom">&minus;</button>
+        <button id="btnZoomReset" class="map-ctrl-btn" title="Centralizar Mapa" aria-label="Centralizar Mapa">&#8635;</button>
+      </div>
+
+      <!-- Barra de Instrução Rápida para o Cidadão -->
+      <div class="map-hint-pill" id="mapHintPill">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/>
+        </svg>
+        <span>Clique nos pinos no mapa para ver o diagnóstico e histórico de 30 dias</span>
+      </div>
+
+      <!-- Contêiner do Mapa com Background lagoa-mapa.jpg -->
+      <div class="map-stage" id="mapStage">
+        <div class="map-canvas-wrapper" id="mapCanvasWrapper">
+          <!-- Imagem de Fundo Interativa Obrigatória -->
+          <img src="lagoa-mapa.jpg" alt="Carta Hidrográfica e Cartográfica da Lagoa da Chapadinha" class="map-background-img" id="mapImage" loading="eager">
+
+          <!-- Pinos Interativos de Amostragem (Injetados via public.js) -->
+          <div class="pins-layer" id="pinsLayer" aria-label="Pontos de amostragem no mapa"></div>
+        </div>
+      </div>
+
+      <!-- Card Flutuante de Diagnóstico e Mini-Gráfico de 30 Dias -->
+      <article id="floatingCard" class="floating-diagnostic-card" role="dialog" aria-modal="false" aria-labelledby="cardPointName" hidden>
+        <div class="card-top-bar">
+          <div class="card-point-info">
+            <span class="point-code-badge" id="cardPointCode">P1</span>
+            <div class="point-titles">
+              <h2 id="cardPointName" class="point-name">Foz do Córrego das Pedras</h2>
+              <span id="cardPointCoords" class="point-coords">10°04'32'' S, 44°17'50'' W</span>
+            </div>
+          </div>
+          <button id="btnCloseCard" class="card-close-btn" aria-label="Fechar diagnóstico do ponto">&times;</button>
+        </div>
+
+        <div class="card-body">
+          <!-- Bloco do Status Semafórico com Destaque para Regra do Pior Cenário -->
+          <div class="status-verdict-box" id="cardVerdictBox">
+            <div class="verdict-header">
+              <div class="verdict-icon-container" id="cardVerdictIcon">
+                <!-- Ícone semafórico SVG injetado via JS -->
+              </div>
+              <div class="verdict-headline">
+                <span class="verdict-badge" id="cardVerdictBadge">CRÍTICO</span>
+                <span class="verdict-sub" id="cardVerdictCondition">Imprópria para Recreação e Consumo</span>
+              </div>
+            </div>
+            <!-- Explicação do Pior Cenário -->
+            <p class="verdict-rationale" id="cardVerdictRationale">
+              Apesar do pH estar dentro da faixa segura (7.30), parâmetros biológicos e físicos ultrapassaram os limites permitidos.
+            </p>
+          </div>
+
+          <!-- Grade de Parâmetros Atuais -->
+          <div class="metrics-grid">
+            <div class="metric-tile" id="tilePh">
+              <span class="metric-label">pH (Potencial Hidrogeniônico)</span>
+              <div class="metric-value-row">
+                <span class="metric-value" id="valPh">7.30</span>
+                <span class="metric-ideal-range">Ideal: 6.0 - 9.0</span>
+              </div>
+              <div class="mini-bar-track">
+                <div class="mini-bar-fill" id="barPh" style="width: 52%;"></div>
+              </div>
+            </div>
+
+            <div class="metric-tile" id="tileTurbidity">
+              <span class="metric-label">Turbidez</span>
+              <div class="metric-value-row">
+                <span class="metric-value" id="valTurbidity">58.0</span>
+                <span class="metric-unit">NTU</span>
+              </div>
+              <span class="metric-threshold" id="threshTurbidity">Máx. CONAMA: 40 NTU</span>
+            </div>
+
+            <div class="metric-tile" id="tileEColi">
+              <span class="metric-label">E. coli (Biológico)</span>
+              <div class="metric-value-row">
+                <span class="metric-value" id="valEColi">1.450</span>
+                <span class="metric-unit">NMP/100mL</span>
+              </div>
+              <span class="metric-threshold" id="threshEColi">Limite: 1.000 NMP/100mL</span>
+            </div>
+
+            <div class="metric-tile" id="tileOd">
+              <span class="metric-label">Oxigênio Dissolvido (OD)</span>
+              <div class="metric-value-row">
+                <span class="metric-value" id="valOd">3.4</span>
+                <span class="metric-unit">mg/L</span>
+              </div>
+              <span class="metric-threshold" id="threshOd">Mínimo: 5.0 mg/L</span>
+            </div>
+
+            <div class="metric-tile" id="tileTemp">
+              <span class="metric-label">Temp. Água</span>
+              <div class="metric-value-row">
+                <span class="metric-value" id="valTemp">26.5</span>
+                <span class="metric-unit">°C</span>
+              </div>
+              <span class="metric-threshold">Média Sazonal</span>
+            </div>
+
+            <div class="metric-tile" id="tilePhosphorus">
+              <span class="metric-label">Fósforo Total</span>
+              <div class="metric-value-row">
+                <span class="metric-value" id="valPhosphorus">0.082</span>
+                <span class="metric-unit">mg/L</span>
+              </div>
+              <span class="metric-threshold">Máx: 0.05 mg/L</span>
+            </div>
+          </div>
+
+          <!-- Seção do Mini-Gráfico Histórico de 30 Dias -->
+          <section class="history-chart-section">
+            <div class="chart-header-row">
+              <div class="chart-title-group">
+                <h3 class="chart-title">Tendência dos Últimos 30 Dias</h3>
+                <span class="chart-subtitle" id="chartMetricLabel">Parâmetro: Turbidez (NTU)</span>
+              </div>
+              <!-- Seleção do Parâmetro a Exibir no Gráfico -->
+              <div class="chart-tabs" role="tablist" aria-label="Parâmetro para histórico">
+                <button class="chart-tab active" data-chart-metric="turbidity" role="tab" aria-selected="true">Turbidez</button>
+                <button class="chart-tab" data-chart-metric="eColi" role="tab" aria-selected="false">E. coli</button>
+                <button class="chart-tab" data-chart-metric="ph" role="tab" aria-selected="false">pH</button>
+                <button class="chart-tab" data-chart-metric="od" role="tab" aria-selected="false">OD</button>
+              </div>
+            </div>
+
+            <!-- Canvas Ultra-Performático Nativo para o Mini-Gráfico -->
+            <div class="canvas-chart-container">
+              <canvas id="miniTrendCanvas" width="480" height="180" aria-label="Gráfico de linha com histórico de 30 dias"></canvas>
+              <div id="chartTooltip" class="chart-tooltip" hidden></div>
+            </div>
+
+            <div class="chart-footer-stats">
+              <div class="stat-item">
+                <span class="stat-title">Mínimo:</span>
+                <span class="stat-value" id="chartStatMin">--</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-title">Média (30d):</span>
+                <span class="stat-value" id="chartStatAvg">--</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-title">Máximo:</span>
+                <span class="stat-value" id="chartStatMax">--</span>
+              </div>
+              <div class="stat-item stat-item--ref">
+                <span class="stat-title">Linha Guia:</span>
+                <span class="stat-value" id="chartStatLimit">CONAMA 357</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Última Coleta e Fiscalização -->
+          <div class="card-footer-info">
+            <div class="audit-row">
+              <span class="audit-icon">&#9200;</span>
+              <span>Última amostragem: <strong id="cardLastCollectionDate">Hoje, 09:30</strong></span>
+            </div>
+            <div class="audit-row">
+              <span class="audit-icon">&#128100;</span>
+              <span>Responsável: <strong id="cardOperator">Equipe Técnica SAMA</strong></span>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script src="public.js"></script>
+</body>
+</html>
