@@ -1,11 +1,12 @@
 /**
  * ============================================================================
  * SAMA - Sistema Autônomo de Monitoramento Ambiental (Lagoa da Chapadinha)
- * VISÃO PÚBLICA (Cidadão) - public.js
+ * VISÃO PÚBLICA (Cidadão) - public.js (HOTFIX Mobile & Desktop)
  *
  * Módulo isolado (IIFE) sem vazamento de escopo global.
  * Implementa a Lógica Semafórica de Pior Cenário, renderizador nativo em Canvas
- * para histórico de 30 dias e interatividade completa com o mapa cartográfico.
+ * para histórico de 30 dias, Bottom Sheet responsivo sem overlay escuro bloqueante,
+ * fechamento instantâneo do card e controle de acesso com senha para o Especialista.
  * ============================================================================
  */
 (function () {
@@ -20,11 +21,14 @@
     totalPhosphorus: { idealMax: 0.03, criticalMax: 0.05, unit: 'mg/L' }
   };
 
+  // Senhas autorizadas para o terminal técnico de campo
+  const VALID_PASSWORDS = ['sama2026', 'admin123', 'operador2026'];
+
   // Chaves de armazenamento
   const STORAGE_KEY_POINTS = 'SAMA_MONITORAMENTO_DB';
 
   // 2. Base de Dados Inicial dos Pontos de Monitoramento da Lagoa da Chapadinha
-  // Cada ponto possui coordenadas cartográficas relativas (% na imagem) e dados hidrológicos
+  // Coordenadas calibradas na foto real de satélite
   const INITIAL_POINTS = [
     {
       id: 'P1',
@@ -153,9 +157,6 @@
     }
   ];
 
-  /**
-   * Gerador determinístico de histórico de 30 dias para testes e demonstração
-   */
   function generate30DayHistory(cfg) {
     const list = [];
     const now = new Date();
@@ -164,7 +165,6 @@
       d.setDate(d.getDate() - i);
       const dayLabel = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
       
-      // Variação suave pseudo-aleatória
       const factor = Math.sin(i * 0.4) * 0.5 + (Math.random() - 0.5) * 0.5;
       
       list.push({
@@ -179,16 +179,7 @@
     return list;
   }
 
-  // 3. REGRA DE NEGÓCIO CRUCIAL: Avaliação do Pior Cenário (Worst-Case Scenario)
-  /**
-   * Avalia a qualidade da água segundo a regra estrita do pior cenário:
-   * Mesmo que o pH esteja perfeito (6.0 a 9.0), se parâmetros biológicos
-   * (E. coli > 1000) ou físicos (Turbidez > 40) forem violados, o status
-   * É OBRIGATORIAMENTE VERMELHO (Crítico).
-   *
-   * @param {Object} p Parâmetros da amostra
-   * @returns {Object} Classificação, badge, explicação e lista de não-conformidades
-   */
+  // 3. REGRA DE NEGÓCIO: Avaliação do Pior Cenário (Worst-Case Scenario)
   function evaluateWorstCaseStatus(p) {
     const criticalViolations = [];
     const warningViolations = [];
@@ -203,7 +194,7 @@
       phStatus = 'yellow';
     }
 
-    // --- B. Parâmetro Biológico: E. coli (Crucial para Balneabilidade) ---
+    // --- B. Parâmetro Biológico: E. coli (Balneabilidade) ---
     let bioStatus = 'green';
     if (p.eColi > THRESHOLDS.eColi.criticalMax) {
       criticalViolations.push(`Contaminação Biológica Severa: E. coli (${p.eColi} NMP/100mL > limite máx. de 1.000)`);
@@ -233,8 +224,7 @@
       odStatus = 'yellow';
     }
 
-    // --- Aplicação Estrita da Regra do Pior Cenário ---
-    // Se QUALQUER parâmetro for Vermelho -> STATUS GERAL = VERMELHO
+    // Aplicação Estrita da Regra do Pior Cenário
     if (criticalViolations.length > 0) {
       let rationaleText = '';
       if (phStatus === 'green') {
@@ -254,7 +244,6 @@
       };
     }
 
-    // Se houver parâmetros em Amarelo e nenhum Vermelho -> STATUS GERAL = AMARELO
     if (warningViolations.length > 0) {
       return {
         level: 'yellow',
@@ -267,7 +256,6 @@
       };
     }
 
-    // Todos os parâmetros atendem aos limites ideais -> STATUS GERAL = VERDE
     return {
       level: 'green',
       badge: 'IDEAL',
@@ -284,9 +272,7 @@
     selectedPoint: null,
     activeFilter: 'all',
     activeChartMetric: 'turbidity',
-    zoomLevel: 1.0,
-    panX: 0,
-    panY: 0
+    zoomLevel: 1.0
   };
 
   // 5. Elementos DOM da Interface
@@ -310,7 +296,7 @@
     kpiCriticalPoints: document.getElementById('kpiCriticalPoints'),
     globalStatusPill: document.getElementById('globalStatusPill'),
 
-    // Card Flutuante
+    // Card Flutuante / Bottom Sheet
     floatingCard: document.getElementById('floatingCard'),
     btnCloseCard: document.getElementById('btnCloseCard'),
     cardPointCode: document.getElementById('cardPointCode'),
@@ -342,7 +328,21 @@
     chartStatMin: document.getElementById('chartStatMin'),
     chartStatAvg: document.getElementById('chartStatAvg'),
     chartStatMax: document.getElementById('chartStatMax'),
-    chartStatLimit: document.getElementById('chartStatLimit')
+    chartStatLimit: document.getElementById('chartStatLimit'),
+
+    // Modal de Autenticação para Especialista
+    btnOpenAuthModal: document.getElementById('btnOpenAuthModal'),
+    btnDrawerOpenAuth: document.getElementById('btnDrawerOpenAuth'),
+    authModal: document.getElementById('authModal'),
+    authBackdrop: document.getElementById('authBackdrop'),
+    authForm: document.getElementById('authForm'),
+    operatorPasswordInput: document.getElementById('operatorPasswordInput'),
+    btnTogglePassword: document.getElementById('btnTogglePassword'),
+    authFieldGroup: document.getElementById('authFieldGroup'),
+    authErrorMsg: document.getElementById('authErrorMsg'),
+    authErrorText: document.getElementById('authErrorText'),
+    btnCloseAuth: document.getElementById('btnCloseAuth'),
+    btnCancelAuth: document.getElementById('btnCancelAuth')
   };
 
   // 6. Inicialização do Banco de Dados
@@ -351,7 +351,6 @@
       const stored = localStorage.getItem(STORAGE_KEY_POINTS);
       if (stored) {
         state.points = JSON.parse(stored);
-        // Atualiza coordenadas e nomes para casar com a nova imagem de satélite
         state.points.forEach(pt => {
           const initMatch = INITIAL_POINTS.find(i => i.id === pt.id || i.code === pt.code);
           if (initMatch) {
@@ -369,7 +368,6 @@
       state.points = INITIAL_POINTS;
     }
 
-    // Calcula os status semafóricos para todos os pontos
     state.points.forEach(pt => {
       pt.statusObj = evaluateWorstCaseStatus(pt.current);
     });
@@ -389,7 +387,6 @@
     DOM.pinsLayer.innerHTML = '';
 
     state.points.forEach(point => {
-      // Filtragem semafórica
       if (state.activeFilter !== 'all' && point.statusObj.level !== state.activeFilter) {
         return;
       }
@@ -456,13 +453,11 @@
       DOM.drawerPointsList.appendChild(li);
     });
 
-    // Atualiza contadores de KPIs
     if (DOM.kpiTotalPoints) DOM.kpiTotalPoints.textContent = countTotal;
     if (DOM.kpiIdealPoints) DOM.kpiIdealPoints.textContent = countGreen;
     if (DOM.kpiWarningPoints) DOM.kpiWarningPoints.textContent = countYellow;
     if (DOM.kpiCriticalPoints) DOM.kpiCriticalPoints.textContent = countRed;
 
-    // Atualiza pílula de status global no topo
     if (DOM.globalStatusPill) {
       const dot = DOM.globalStatusPill.querySelector('.status-dot');
       const text = DOM.globalStatusPill.querySelector('.status-text');
@@ -479,19 +474,19 @@
     }
   }
 
-  // 9. Seleção de Ponto e Abertura do Card Flutuante
+  // 9. Seleção de Ponto e Abertura do Card (SEM BACKDROP DESFOCADO)
   function selectPoint(pointId) {
     const point = state.points.find(p => p.id === pointId);
     if (!point) return;
 
     state.selectedPoint = point;
 
-    // Atualiza classe ativa dos pinos
+    // Atualiza classe ativa dos pinos no mapa
     document.querySelectorAll('.map-pin').forEach(pin => {
       pin.classList.toggle('active', pin.getAttribute('data-point-id') === pointId);
     });
 
-    // Preenche os dados no Card Flutuante
+    // Preenche dados no Card Flutuante
     DOM.cardPointCode.textContent = point.code;
     DOM.cardPointName.textContent = point.name;
     DOM.cardPointCoords.textContent = point.coordsDesc;
@@ -505,7 +500,6 @@
     DOM.cardVerdictCondition.textContent = st.condition;
     DOM.cardVerdictRationale.textContent = st.rationale;
 
-    // Ícone SVG Semafórico
     let iconSvg = '';
     if (st.level === 'green') {
       iconSvg = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`;
@@ -519,7 +513,6 @@
     // Preenche Métricas
     const curr = point.current;
     DOM.valPh.textContent = curr.ph.toFixed(2);
-    // Barra de pH (0 a 14)
     const phPercent = Math.min(100, Math.max(0, (curr.ph / 14) * 100));
     DOM.barPh.style.width = `${phPercent}%`;
 
@@ -547,24 +540,30 @@
     DOM.valTemp.textContent = curr.waterTemp.toFixed(1);
     DOM.valPhosphorus.textContent = curr.totalPhosphorus.toFixed(3);
 
-    // Exibe o card flutuante
-    DOM.floatingCard.hidden = false;
+    // HOTFIX: Exibe explicitamente o card sem nenhum overlay/backdrop escuro bloqueante
+    if (DOM.floatingCard) {
+      DOM.floatingCard.removeAttribute('hidden');
+      DOM.floatingCard.style.display = 'flex';
+      DOM.floatingCard.classList.add('active', 'open');
+    }
 
     // Renderiza o mini-gráfico de 30 dias em Canvas
     renderCanvasChart();
   }
 
+  // HOTFIX: FECHAMENTO EXPLICITO COM display = 'none' PARA DESOBSTRUIR O MAPA
   function closeCard() {
     if (DOM.floatingCard) {
-      DOM.floatingCard.hidden = true;
+      DOM.floatingCard.style.display = 'none';
+      DOM.floatingCard.classList.remove('active', 'open');
+      DOM.floatingCard.setAttribute('hidden', '');
     }
     state.selectedPoint = null;
     document.querySelectorAll('.map-pin').forEach(pin => pin.classList.remove('active'));
   }
 
   // 10. RENDERIZADOR NATIVO EM CANVAS DO MINI-GRÁFICO DE 30 DIAS
-  // Ultra-leve, zero dependências de rede, performance de < 2ms e alta definição.
-  let chartPointsCoords = []; // Armazena posições para hover do tooltip
+  let chartPointsCoords = [];
 
   function renderCanvasChart() {
     if (!state.selectedPoint || !DOM.miniTrendCanvas) return;
@@ -575,10 +574,9 @@
 
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
-    const width = rect.width;
-    const height = rect.height;
+    const width = rect.width || 380;
+    const height = rect.height || 160;
 
-    // Calibração Retina Display
     canvas.width = width * dpr;
     canvas.height = height * dpr;
     ctx.scale(dpr, dpr);
@@ -591,7 +589,6 @@
     const metric = state.activeChartMetric;
     const dataVals = history.map(h => h[metric]);
 
-    // Metadados do parâmetro selecionado
     let metricTitle = '';
     let unit = '';
     let limitVal = null;
@@ -603,7 +600,7 @@
       case 'turbidity':
         metricTitle = 'Turbidez';
         unit = 'NTU';
-        limitVal = THRESHOLDS.turbidity.criticalMax; // 40
+        limitVal = THRESHOLDS.turbidity.criticalMax;
         limitLabel = 'Limite CONAMA (40 NTU)';
         lineColor = '#f59e0b';
         gradientStart = 'rgba(245, 158, 11, 0.25)';
@@ -611,7 +608,7 @@
       case 'eColi':
         metricTitle = 'E. coli';
         unit = 'NMP/100mL';
-        limitVal = THRESHOLDS.eColi.criticalMax; // 1000
+        limitVal = THRESHOLDS.eColi.criticalMax;
         limitLabel = 'Limite Balneabilidade (1000 NMP)';
         lineColor = '#ef4444';
         gradientStart = 'rgba(239, 68, 68, 0.25)';
@@ -627,7 +624,7 @@
       case 'od':
         metricTitle = 'Oxigênio Dissolvido';
         unit = 'mg/L';
-        limitVal = THRESHOLDS.dissolvedOxygen.criticalMin; // 4.0
+        limitVal = THRESHOLDS.dissolvedOxygen.criticalMin;
         limitLabel = 'Mínimo Aceitável (4.0 mg/L)';
         lineColor = '#3b82f6';
         gradientStart = 'rgba(59, 130, 246, 0.25)';
@@ -638,7 +635,6 @@
       DOM.chartMetricLabel.textContent = `Parâmetro: ${metricTitle} (${unit || 'Escala'})`;
     }
 
-    // Cálculos Estatísticos (Mín, Média, Máx)
     const minVal = Math.min(...dataVals);
     const maxVal = Math.max(...dataVals);
     const avgVal = dataVals.reduce((a, b) => a + b, 0) / dataVals.length;
@@ -648,7 +644,6 @@
     if (DOM.chartStatMax) DOM.chartStatMax.textContent = `${maxVal.toFixed(1)} ${unit}`;
     if (DOM.chartStatLimit) DOM.chartStatLimit.textContent = limitLabel;
 
-    // Área Útil do Gráfico
     const padTop = 20;
     const padBottom = 26;
     const padLeft = 42;
@@ -656,7 +651,6 @@
     const plotW = width - padLeft - padRight;
     const plotH = height - padTop - padBottom;
 
-    // Escala Y com folga visual
     let yMin = Math.min(minVal, limitVal !== null ? limitVal : minVal);
     let yMax = Math.max(maxVal, limitVal !== null ? limitVal : maxVal);
     const span = yMax - yMin || 1;
@@ -692,7 +686,7 @@
       ctx.fillText(gVal.toFixed(1), padLeft - 6, gy);
     }
 
-    // Linha de Limite Regulatório CONAMA (se aplicável)
+    // Linha de Limite Regulatório CONAMA
     if (limitVal !== null && limitVal >= yMin && limitVal <= yMax) {
       const limitY = getY(limitVal);
       ctx.save();
@@ -711,7 +705,7 @@
       ctx.restore();
     }
 
-    // Área Preenchida com Gradiente
+    // Área com Gradiente
     ctx.setLineDash([]);
     const gradient = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
     gradient.addColorStop(0, gradientStart);
@@ -751,7 +745,7 @@
     ctx.lineWidth = 2.2;
     ctx.stroke();
 
-    // Marcadores dos Pontos (Apenas nos dias extremos e amostrais)
+    // Marcadores dos Pontos
     chartPointsCoords.forEach((pt, idx) => {
       if (idx === 0 || idx === chartPointsCoords.length - 1 || idx % 7 === 0) {
         ctx.beginPath();
@@ -764,7 +758,7 @@
       }
     });
 
-    // Rótulos do Eixo X (Datas)
+    // Rótulos de Data
     ctx.fillStyle = '#94a3b8';
     ctx.font = '10px system-ui, sans-serif';
     ctx.textAlign = 'center';
@@ -779,7 +773,6 @@
     if (lastPt) ctx.fillText(`Hoje (${lastPt.date})`, lastPt.x - 12, padTop + plotH + 8);
   }
 
-  // Interatividade com Hover no Canvas (Tooltip dos 30 dias)
   function setupCanvasTooltip() {
     const canvas = DOM.miniTrendCanvas;
     const tooltip = DOM.chartTooltip;
@@ -792,7 +785,6 @@
 
       if (!chartPointsCoords || chartPointsCoords.length === 0) return;
 
-      // Encontra o ponto mais próximo horizontalmente
       let closest = chartPointsCoords[0];
       let minDiff = Math.abs(mouseX - closest.x);
 
@@ -817,9 +809,7 @@
     }
 
     canvas.addEventListener('mousemove', handlePointerMove);
-    canvas.addEventListener('mouseleave', () => {
-      tooltip.hidden = true;
-    });
+    canvas.addEventListener('mouseleave', () => { tooltip.hidden = true; });
 
     canvas.addEventListener('touchmove', (e) => {
       if (e.touches && e.touches[0]) {
@@ -827,12 +817,81 @@
       }
     }, { passive: true });
 
-    canvas.addEventListener('touchend', () => {
-      tooltip.hidden = true;
-    });
+    canvas.addEventListener('touchend', () => { tooltip.hidden = true; });
   }
 
-  // 11. Controles do Menu Lateral (Drawer Overlay Suave)
+  // 11. CONTROLE DE ACESSO COM SENHA PARA O ESPECIALISTA
+  function openAuthModal() {
+    if (!DOM.authModal) return;
+    DOM.authModal.hidden = false;
+    if (DOM.authBackdrop) DOM.authBackdrop.hidden = false;
+    clearAuthError();
+    if (DOM.operatorPasswordInput) {
+      DOM.operatorPasswordInput.value = '';
+      DOM.operatorPasswordInput.type = 'password';
+      setTimeout(() => DOM.operatorPasswordInput.focus(), 120);
+    }
+  }
+
+  function closeAuthModal() {
+    if (DOM.authModal) {
+      DOM.authModal.hidden = true;
+      DOM.authModal.classList.remove('shake');
+    }
+    if (DOM.authBackdrop) DOM.authBackdrop.hidden = true;
+  }
+
+  function handleAuthSubmit(e) {
+    e.preventDefault();
+    const pwd = DOM.operatorPasswordInput ? DOM.operatorPasswordInput.value.trim() : '';
+
+    if (VALID_PASSWORDS.includes(pwd)) {
+      clearAuthError();
+      const submitBtn = DOM.authForm ? DOM.authForm.querySelector('.btn-auth-submit') : null;
+      if (submitBtn) {
+        submitBtn.innerHTML = `<span>&#10003; Acesso Autorizado! Entrando...</span>`;
+        submitBtn.style.backgroundColor = '#16a34a';
+      }
+      setTimeout(() => {
+        window.location.href = 'especialista.html';
+      }, 500);
+    } else {
+      showAuthError('Senha incorreta. Código do operador não autorizado.');
+      if (DOM.authModal) {
+        DOM.authModal.classList.remove('shake');
+        void DOM.authModal.offsetWidth;
+        DOM.authModal.classList.add('shake');
+      }
+      if (DOM.operatorPasswordInput) {
+        DOM.operatorPasswordInput.focus();
+        DOM.operatorPasswordInput.select();
+      }
+    }
+  }
+
+  function showAuthError(msg) {
+    if (DOM.authFieldGroup) DOM.authFieldGroup.classList.add('has-error');
+    if (DOM.authErrorMsg) {
+      DOM.authErrorMsg.hidden = false;
+      if (DOM.authErrorText) DOM.authErrorText.textContent = msg;
+    }
+  }
+
+  function clearAuthError() {
+    if (DOM.authFieldGroup) DOM.authFieldGroup.classList.remove('has-error');
+    if (DOM.authErrorMsg) DOM.authErrorMsg.hidden = true;
+  }
+
+  function togglePasswordVisibility() {
+    if (!DOM.operatorPasswordInput) return;
+    const isPwd = DOM.operatorPasswordInput.type === 'password';
+    DOM.operatorPasswordInput.type = isPwd ? 'text' : 'password';
+    if (DOM.btnTogglePassword) {
+      DOM.btnTogglePassword.title = isPwd ? 'Ocultar senha' : 'Ver senha';
+    }
+  }
+
+  // 12. Controles do Menu Lateral
   function openDrawer() {
     DOM.sideDrawer.classList.add('active');
     DOM.drawerBackdrop.classList.add('active');
@@ -847,7 +906,7 @@
     DOM.btnToggleDrawer.setAttribute('aria-expanded', 'false');
   }
 
-  // 12. Controles de Zoom do Mapa
+  // 13. Controles de Zoom do Mapa
   function applyZoom(newZoom) {
     state.zoomLevel = Math.min(2.5, Math.max(1.0, newZoom));
     if (DOM.mapCanvasWrapper) {
@@ -855,15 +914,43 @@
     }
   }
 
-  // 13. Event Listeners e Inicialização Geral
+  // 14. Event Listeners e Inicialização
   function setupEventListeners() {
     // Menu Drawer
     DOM.btnToggleDrawer.addEventListener('click', openDrawer);
     DOM.btnCloseDrawer.addEventListener('click', closeDrawer);
     DOM.drawerBackdrop.addEventListener('click', closeDrawer);
 
-    // Fechar Card Flutuante
-    DOM.btnCloseCard.addEventListener('click', closeCard);
+    // HOTFIX: Fechar Card de Diagnóstico no botão "X" explicitamente
+    if (DOM.btnCloseCard) {
+      DOM.btnCloseCard.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        closeCard();
+      });
+    }
+
+    // Modal de Autenticação para Especialista
+    if (DOM.btnOpenAuthModal) {
+      DOM.btnOpenAuthModal.addEventListener('click', (e) => {
+        e.preventDefault();
+        openAuthModal();
+      });
+    }
+
+    if (DOM.btnDrawerOpenAuth) {
+      DOM.btnDrawerOpenAuth.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeDrawer();
+        openAuthModal();
+      });
+    }
+
+    if (DOM.btnCloseAuth) DOM.btnCloseAuth.addEventListener('click', closeAuthModal);
+    if (DOM.btnCancelAuth) DOM.btnCancelAuth.addEventListener('click', closeAuthModal);
+    if (DOM.authBackdrop) DOM.authBackdrop.addEventListener('click', closeAuthModal);
+    if (DOM.authForm) DOM.authForm.addEventListener('submit', handleAuthSubmit);
+    if (DOM.btnTogglePassword) DOM.btnTogglePassword.addEventListener('click', togglePasswordVisibility);
 
     // Filtros Semafóricos no Drawer
     DOM.filterButtons.forEach(btn => {
@@ -894,25 +981,25 @@
     DOM.btnZoomOut.addEventListener('click', () => applyZoom(state.zoomLevel - 0.25));
     DOM.btnZoomReset.addEventListener('click', () => applyZoom(1.0));
 
-    // Fechar ao teclar Esc
+    // Tecla Escape fecha modais e cards
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         closeCard();
         closeDrawer();
+        closeAuthModal();
       }
     });
 
-    // Responsividade no redimensionamento da janela (re-renderiza Canvas com DPI correto)
+    // Redimensionamento
     window.addEventListener('resize', () => {
       if (state.selectedPoint) {
         renderCanvasChart();
       }
     });
 
-    // Tooltip interativo do gráfico
     setupCanvasTooltip();
 
-    // Sincronização passiva: se o operador salvou algo no especialista em outra aba
+    // Sincronização passiva com o LocalStorage
     window.addEventListener('storage', (e) => {
       if (e.key === STORAGE_KEY_POINTS) {
         initDatabase();
@@ -925,20 +1012,23 @@
     });
   }
 
-  // 14. Inicialização do Módulo Público
+  // 15. Inicialização do Módulo Público
   function bootstrap() {
     initDatabase();
     renderMapPins();
     renderDrawerInfo();
     setupEventListeners();
 
-    // Abre o Ponto 1 (Crítico) por padrão para demonstrar imediatamente a regra de pior cenário exigida
-    setTimeout(() => {
-      selectPoint('P1');
-    }, 400);
+    // HOTFIX: No mobile, NUNCA abre o card automaticamente na carga inicial
+    // para não tampar o mapa e deixar o usuário explorar livremente!
+    // Apenas em desktop (>= 1024px) abre o P1 no painel lateral
+    if (window.innerWidth >= 1024) {
+      setTimeout(() => {
+        selectPoint('P1');
+      }, 300);
+    }
   }
 
-  // Executa no DOMContentLoaded garantindo renderização ultra rápida (< 2s)
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', bootstrap);
   } else {
